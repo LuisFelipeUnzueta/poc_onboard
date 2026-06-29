@@ -1,0 +1,6 @@
+@Onboarding_HostAddress = http://localhost:5133
+
+GET {{Onboarding_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
