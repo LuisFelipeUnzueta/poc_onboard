@@ -87,9 +87,9 @@ public sealed class ValueObjectTests
     }
 
     [Fact]
-    public void RazaoSocial_Create_Should_Return_Failure_When_Empty()
+    public void LegalName_Create_Should_Return_Failure_When_Empty()
     {
-        var result = RazaoSocial.Create(" ");
+        var result = LegalName.Create(" ");
 
         result.IsFailure.Should().BeTrue();
     }

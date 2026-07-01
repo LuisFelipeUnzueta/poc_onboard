@@ -10,5 +10,17 @@ public sealed record DomainError(string Code, string Message)
         "DOCUMENT_ALREADY_UPLOADED",
         "Document type already uploaded for this proposal.");
 
+    public static readonly DomainError ProposalAlreadyExists = new(
+        "PROPOSAL_ALREADY_EXISTS",
+        "CNPJ already has an active proposal.");
+
+    public static readonly DomainError ProposalNotFound = new(
+        "PROPOSAL_NOT_FOUND",
+        "Proposal not found.");
+
+    public static readonly DomainError IdempotencyConflict = new(
+        "IDEMPOTENCY_CONFLICT",
+        "Idempotency-Key was already used with a different payload.");
+
     public static DomainError Validation(string message) => new("VALIDATION_ERROR", message);
 }

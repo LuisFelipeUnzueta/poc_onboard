@@ -25,7 +25,7 @@ public sealed class ProposalTests
         var result = Proposal.Create(
             PartnerId.New(),
             ValidCnpj(),
-            ValidRazaoSocial(),
+            ValidLegalName(),
             Segment.PayFac,
             ValidMcc(),
             [],
@@ -43,7 +43,7 @@ public sealed class ProposalTests
         var result = Proposal.Create(
             PartnerId.New(),
             ValidCnpj(),
-            ValidRazaoSocial(),
+            ValidLegalName(),
             Segment.PayFac,
             ValidMcc(),
             [partner],
@@ -122,7 +122,7 @@ public sealed class ProposalTests
         return Proposal.Create(
             PartnerId.New(),
             ValidCnpj(),
-            ValidRazaoSocial(),
+            ValidLegalName(),
             Segment.PayFac,
             ValidMcc(),
             [partner],
@@ -152,7 +152,7 @@ public sealed class ProposalTests
 
     private static Cpf ValidCpf() => Cpf.Create("529.982.247-25").Value!;
 
-    private static RazaoSocial ValidRazaoSocial() => RazaoSocial.Create("Empresa Exemplo Ltda").Value!;
+    private static LegalName ValidLegalName() => LegalName.Create("Empresa Exemplo Ltda").Value!;
 
     private static Mcc ValidMcc() => Mcc.Create("5411").Value!;
 

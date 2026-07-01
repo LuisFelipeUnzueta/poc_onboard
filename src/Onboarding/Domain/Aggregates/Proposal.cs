@@ -14,7 +14,7 @@ public sealed class Proposal : AggregateRoot<ProposalId>
         ProposalId id,
         PartnerId partnerId,
         Cnpj cnpj,
-        RazaoSocial razaoSocial,
+        LegalName legalName,
         Segment segment,
         Mcc mcc,
         IEnumerable<Partner> partners,
@@ -25,7 +25,7 @@ public sealed class Proposal : AggregateRoot<ProposalId>
     {
         PartnerId = partnerId;
         Cnpj = cnpj;
-        RazaoSocial = razaoSocial;
+        LegalName = legalName;
         Segment = segment;
         Mcc = mcc;
         Status = ProposalStatus.PendingDocuments;
@@ -39,7 +39,7 @@ public sealed class Proposal : AggregateRoot<ProposalId>
 
     public PartnerId PartnerId { get; private set; }
     public Cnpj Cnpj { get; private set; }
-    public RazaoSocial RazaoSocial { get; private set; }
+    public LegalName LegalName { get; private set; }
     public Segment Segment { get; private set; }
     public Mcc Mcc { get; private set; }
     public ProposalStatus Status { get; private set; }
@@ -54,7 +54,7 @@ public sealed class Proposal : AggregateRoot<ProposalId>
     public static Result<Proposal> Create(
         PartnerId partnerId,
         Cnpj cnpj,
-        RazaoSocial razaoSocial,
+        LegalName legalName,
         Segment segment,
         Mcc mcc,
         IEnumerable<Partner> partners,
@@ -82,7 +82,7 @@ public sealed class Proposal : AggregateRoot<ProposalId>
             ProposalId.New(),
             partnerId,
             cnpj,
-            razaoSocial,
+            legalName,
             segment,
             mcc,
             partnersList,
