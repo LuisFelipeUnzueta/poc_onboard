@@ -54,3 +54,16 @@ public sealed record ProposalDocumentResponse(
     DocumentType DocumentType,
     string Status,
     DateTimeOffset UploadedAt);
+
+public sealed record UploadDocumentRequest(
+    string DocumentType,
+    string FileName,
+    string ContentType,
+    long Length,
+    Stream Content);
+
+public sealed record UploadDocumentResponse(
+    string DocumentId,
+    string DocumentType,
+    string Status,
+    DateTimeOffset UploadedAt);

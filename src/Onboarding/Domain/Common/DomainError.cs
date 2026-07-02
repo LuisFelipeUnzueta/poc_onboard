@@ -18,6 +18,10 @@ public sealed record DomainError(string Code, string Message)
         "PROPOSAL_NOT_FOUND",
         "Proposal not found.");
 
+    public static readonly DomainError InvalidProposalStatus = new(
+        "INVALID_PROPOSAL_STATUS",
+        "Proposal is not in PendingDocuments status.");
+
     public static readonly DomainError IdempotencyConflict = new(
         "IDEMPOTENCY_CONFLICT",
         "Idempotency-Key was already used with a different payload.");

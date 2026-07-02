@@ -4,6 +4,7 @@ public enum ProposalStatus
 {
     Draft,
     PendingDocuments,
+    WaitingDocumentsApproval,
     PendingPricing,
     PendingRiskAnalysis,
     Approved,

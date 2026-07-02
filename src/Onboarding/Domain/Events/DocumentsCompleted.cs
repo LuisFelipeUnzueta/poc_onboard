@@ -1,12 +1,8 @@
 using Onboarding.Domain.Common;
-using Onboarding.Domain.Enums;
 using Onboarding.Domain.ValueObjects;
 
 namespace Onboarding.Domain.Events;
 
-public sealed record DocumentAttached(
+public sealed record DocumentsCompleted(
     ProposalId ProposalId,
-    DocumentId DocumentId,
-    DocumentType DocumentType,
-    S3Key S3Key,
     DateTimeOffset OccurredAt) : IDomainEvent;

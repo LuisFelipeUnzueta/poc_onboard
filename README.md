@@ -2,7 +2,7 @@
 
 Backend POC para onboarding de merchants, implementado em .NET 10 e C# 14.
 
-Estado atual: API core de proposals com persistencia em DynamoDB, idempotencia via Redis e documentacao com Scalar.
+Estado atual: API core de proposals com persistencia em DynamoDB, idempotencia via Redis, upload de documentos em S3/LocalStack e documentacao com Scalar.
 
 ## Stack atual
 
@@ -10,6 +10,7 @@ Estado atual: API core de proposals com persistencia em DynamoDB, idempotencia v
 - C# 14
 - ASP.NET Core Web API
 - DynamoDB Local
+- S3 via LocalStack
 - Redis
 - Scalar
 - xUnit
@@ -33,6 +34,7 @@ src/
     Infrastructure/
       DynamoDb/
       Redis/
+      S3/
 tests/
   Onboarding.UnitTests/
 docker-compose.yml
@@ -44,15 +46,43 @@ Onboarding.slnx
 - `GET /health/live`
 - `POST /api/proposals`
 - `GET /api/proposals/{proposalId}`
+- `POST /api/proposals/{proposalId}/documents`
 - `GET /scalar`
 - `GET /openapi/v1.json`
+
+### Upload de documento
+
+```http
+POST /api/proposals/{proposalId}/documents
+Content-Type: multipart/form-data
+```
+
+Campos obrigatorios:
+
+- `documentType`
+- `file`
+
+Tipos aceitos:
+
+- `application/pdf`
+- `image/jpeg`
+- `image/png`
+
+Limite: `10 MB`.
+
+S3 key:
+
+```text
+proposals/{proposalId}/documents/{documentType}/{timestamp}-{sanitizedFilename}
+```
+
+Ao enviar todos os documentos obrigatorios, a proposta transiciona de `PendingDocuments` para `WaitingDocumentsApproval`.
 
 ## Como validar
 
 ```bash
 dotnet restore
 dotnet build --no-restore
-dotnet test tests/Onboarding.UnitTests --no-restore
 ```
 
 ## Como rodar
@@ -80,3 +110,8 @@ Servicos expostos:
 - Redis: `localhost:6379`
 - LocalStack: `localhost:4566`
 - Kafka: `localhost:9092`
+
+Storage de documentos:
+
+- Bucket S3 local: `onboarding-documents`
+- Endpoint S3 local: `http://localhost:4566`

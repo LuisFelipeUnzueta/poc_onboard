@@ -15,3 +15,11 @@ public interface IGetProposalUseCase
 {
     Task<ApplicationResult<ProposalDetailsResponse>> ExecuteAsync(string proposalId, CancellationToken cancellationToken);
 }
+
+public interface IUploadDocumentUseCase
+{
+    Task<ApplicationResult<UploadDocumentResponse>> ExecuteAsync(
+        string proposalId,
+        UploadDocumentRequest request,
+        CancellationToken cancellationToken);
+}

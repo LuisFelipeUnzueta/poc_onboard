@@ -1,5 +1,6 @@
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
+using System.Globalization;
 using Microsoft.Extensions.Options;
 using Onboarding.Application.Abstractions;
 using Onboarding.Application.Proposals;
@@ -77,32 +78,189 @@ public sealed class DynamoDbProposalRepository(
 
     public async Task<ProposalDetailsResponse?> GetByIdAsync(ProposalId proposalId, CancellationToken cancellationToken)
     {
-        var response = await dynamoDb.GetItemAsync(new GetItemRequest
-        {
-            TableName = _tableName,
-            Key = new Dictionary<string, AttributeValue>
-            {
-                ["PK"] = new($"PROPOSAL#{proposalId.Value}"),
-                ["SK"] = new(MetadataSk)
-            }
-        }, cancellationToken);
-
-        if (response.Item.Count == 0)
+        var proposal = await GetAggregateByIdAsync(proposalId, cancellationToken);
+        if (proposal is null)
         {
             return null;
         }
 
-        var item = response.Item;
         return new ProposalDetailsResponse(
-            item["ProposalId"].S,
-            item["Status"].S,
-            item["Cnpj"].S,
-            item["LegalName"].S,
-            item["Segment"].S,
-            [],
-            DateTimeOffset.Parse(item["CreatedAt"].S),
-            DateTimeOffset.Parse(item["UpdatedAt"].S));
+            proposal.Id.Value,
+            proposal.Status.ToString(),
+            proposal.Cnpj.Value,
+            proposal.LegalName.Value,
+            proposal.Segment.ToString(),
+            proposal.Documents.Select(document => new ProposalDocumentResponse(
+                document.DocumentType,
+                "Received",
+                document.UploadedAt)).ToArray(),
+            proposal.CreatedAt,
+            proposal.UpdatedAt);
     }
+
+    public async Task<Proposal?> GetAggregateByIdAsync(ProposalId proposalId, CancellationToken cancellationToken)
+    {
+        var response = await dynamoDb.QueryAsync(new QueryRequest
+        {
+            TableName = _tableName,
+            KeyConditionExpression = "PK = :pk",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":pk"] = new($"PROPOSAL#{proposalId.Value}")
+            }
+        }, cancellationToken);
+
+        if (response.Count == 0)
+        {
+            return null;
+        }
+
+        var metadata = response.Items.SingleOrDefault(item => item["SK"].S == MetadataSk);
+        if (metadata is null)
+        {
+            return null;
+        }
+
+        var documents = response.Items
+            .Where(item => item["SK"].S.StartsWith("DOC#", StringComparison.Ordinal))
+            .Select(ToDocument)
+            .ToArray();
+
+        return ToProposal(metadata, documents);
+    }
+
+    public async Task SaveDocumentUploadAsync(Proposal proposal, ProposalDocument document, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dynamoDb.TransactWriteItemsAsync(new TransactWriteItemsRequest
+            {
+                TransactItems =
+                [
+                    new TransactWriteItem
+                    {
+                        Put = new Put
+                        {
+                            TableName = _tableName,
+                            Item = ToDocumentItem(proposal.Id, document),
+                            ConditionExpression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                        }
+                    },
+                    new TransactWriteItem
+                    {
+                        Update = new Update
+                        {
+                            TableName = _tableName,
+                            Key = new Dictionary<string, AttributeValue>
+                            {
+                                ["PK"] = new($"PROPOSAL#{proposal.Id.Value}"),
+                                ["SK"] = new(MetadataSk)
+                            },
+                            UpdateExpression = "SET #status = :status, GSI1PK = :gsi1pk, GSI1SK = :gsi1sk, UpdatedAt = :updatedAt, Version = :version",
+                            ConditionExpression = "attribute_exists(PK) AND attribute_exists(SK)",
+                            ExpressionAttributeNames = new Dictionary<string, string>
+                            {
+                                ["#status"] = "Status"
+                            },
+                            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                            {
+                                [":status"] = new(proposal.Status.ToString()),
+                                [":gsi1pk"] = new($"STATUS#{proposal.Status}"),
+                                [":gsi1sk"] = new($"{proposal.CreatedAt:O}#{proposal.Id.Value}"),
+                                [":updatedAt"] = new(proposal.UpdatedAt.ToString("O")),
+                                [":version"] = new() { N = proposal.Version.ToString(CultureInfo.InvariantCulture) }
+                            }
+                        }
+                    }
+                ]
+            }, cancellationToken);
+        }
+        catch (TransactionCanceledException exception) when (exception.CancellationReasons.Any(reason => reason.Code == "ConditionalCheckFailed"))
+        {
+            throw new DocumentAlreadyUploadedException();
+        }
+    }
+
+    private static Proposal ToProposal(Dictionary<string, AttributeValue> item, IReadOnlyList<ProposalDocument> documents)
+    {
+        var partners = item["Partners"].L.Select(ToPartner).ToArray();
+        var bankAccount = ToBankAccount(item["BankAccount"].M);
+        var address = ToAddress(item["Address"].M);
+
+        return Proposal.Rehydrate(
+            ProposalId.Create(item["ProposalId"].S).Value!,
+            PartnerId.Create(item["PartnerId"].S).Value!,
+            Cnpj.Create(item["Cnpj"].S).Value!,
+            LegalName.Create(item["LegalName"].S).Value!,
+            Enum.Parse<Segment>(item["Segment"].S),
+            Mcc.Create(item["Mcc"].S).Value!,
+            Enum.Parse<ProposalStatus>(item["Status"].S),
+            partners,
+            bankAccount,
+            address,
+            documents,
+            DateTimeOffset.Parse(item["CreatedAt"].S),
+            DateTimeOffset.Parse(item["UpdatedAt"].S),
+            int.Parse(item["Version"].N, CultureInfo.InvariantCulture));
+    }
+
+    private static ProposalDocument ToDocument(Dictionary<string, AttributeValue> item)
+    {
+        return new ProposalDocument(
+            DocumentId.Create(item["DocumentId"].S).Value!,
+            Enum.Parse<DocumentType>(item["DocumentType"].S),
+            S3Key.Create(item["S3Key"].S).Value!,
+            DateTimeOffset.Parse(item["UploadedAt"].S));
+    }
+
+    private static Partner ToPartner(AttributeValue item)
+    {
+        var partner = item.M;
+
+        return Partner.Create(
+            partner["Name"].S,
+            Cpf.Create(partner["Cpf"].S).Value!,
+            decimal.Parse(partner["ParticipationPercentage"].N, CultureInfo.InvariantCulture),
+            partner["IsLegalRepresentative"].BOOL).Value!;
+    }
+
+    private static BankAccount ToBankAccount(Dictionary<string, AttributeValue> item)
+    {
+        return BankAccount.Create(
+            item["Ispb"].S,
+            item["Agency"].S,
+            item["AccountNumber"].S,
+            item["AccountDigit"].S,
+            Enum.Parse<BankAccountType>(item["AccountType"].S)).Value!;
+    }
+
+    private static Address ToAddress(Dictionary<string, AttributeValue> item)
+    {
+        var complement = item["Complement"].NULL ? null : item["Complement"].S;
+
+        return Address.Create(
+            item["ZipCode"].S,
+            item["Street"].S,
+            item["Number"].S,
+            complement,
+            item["Neighborhood"].S,
+            item["City"].S,
+            item["State"].S).Value!;
+    }
+
+    private static Dictionary<string, AttributeValue> ToDocumentItem(ProposalId proposalId, ProposalDocument document) =>
+        new()
+        {
+            ["PK"] = new($"PROPOSAL#{proposalId.Value}"),
+            ["SK"] = new($"DOC#{document.DocumentType}"),
+            ["Type"] = new("ProposalDocument"),
+            ["DocumentId"] = new(document.Id.Value),
+            ["ProposalId"] = new(proposalId.Value),
+            ["DocumentType"] = new(document.DocumentType.ToString()),
+            ["S3Key"] = new(document.S3Key.Value),
+            ["Status"] = new("Received"),
+            ["UploadedAt"] = new(document.UploadedAt.ToString("O"))
+        };
 
     private static Dictionary<string, AttributeValue> ToMetadataItem(Proposal proposal) =>
         new()
@@ -123,7 +281,7 @@ public sealed class DynamoDbProposalRepository(
             ["Status"] = new(proposal.Status.ToString()),
             ["CreatedAt"] = new(proposal.CreatedAt.ToString("O")),
             ["UpdatedAt"] = new(proposal.UpdatedAt.ToString("O")),
-            ["Version"] = new() { N = proposal.Version.ToString() },
+            ["Version"] = new() { N = proposal.Version.ToString(CultureInfo.InvariantCulture) },
             ["Partners"] = new() { L = proposal.Partners.Select(ToPartnerAttribute).ToList() },
             ["BankAccount"] = ToBankAccountAttribute(proposal),
             ["Address"] = ToAddressAttribute(proposal)
@@ -136,7 +294,7 @@ public sealed class DynamoDbProposalRepository(
             {
                 ["Name"] = new(partner.Name),
                 ["Cpf"] = new(partner.Cpf.Value),
-                ["ParticipationPercentage"] = new() { N = partner.ParticipationPercentage.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+                ["ParticipationPercentage"] = new() { N = partner.ParticipationPercentage.ToString(CultureInfo.InvariantCulture) },
                 ["IsLegalRepresentative"] = new() { BOOL = partner.IsLegalRepresentative }
             }
         };

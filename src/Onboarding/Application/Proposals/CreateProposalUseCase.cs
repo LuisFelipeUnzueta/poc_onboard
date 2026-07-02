@@ -58,7 +58,7 @@ public sealed class CreateProposalUseCase(
         var response = new CreateProposalResponse(
             proposal.Id.Value,
             proposal.Status.ToString(),
-            documentRulesService.GetRequiredDocuments(proposal.Segment).Select(document => document.ToString()).ToArray(),
+            documentRulesService.GetRequiredDocuments(proposal.Segment, PersonType.LegalPerson).Select(document => document.ToString()).ToArray(),
             proposal.CreatedAt);
 
         await idempotencyStore.SetAsync(

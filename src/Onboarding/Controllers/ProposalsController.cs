@@ -11,7 +11,8 @@ namespace Onboarding.Controllers;
 [Route("api/proposals")]
 public sealed class ProposalsController(
     ICreateProposalUseCase createProposalUseCase,
-    IGetProposalUseCase getProposalUseCase) : ControllerBase
+    IGetProposalUseCase getProposalUseCase,
+    IUploadDocumentUseCase uploadDocumentUseCase) : ControllerBase
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -58,6 +59,38 @@ public sealed class ProposalsController(
     public async Task<IActionResult> GetByIdAsync(string proposalId, CancellationToken cancellationToken)
     {
         var result = await getProposalUseCase.ExecuteAsync(proposalId, cancellationToken);
+
+        return result.IsSuccess
+            ? Ok(result.Value)
+            : Problem(result.Error!);
+    }
+
+    [HttpPost("{proposalId}/documents")]
+    [Consumes("multipart/form-data")]
+    [ProducesResponseType<UploadDocumentResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> UploadDocumentAsync(
+        string proposalId,
+        [FromForm] string documentType,
+        [FromForm] IFormFile? file,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(documentType) || file is null || file.Length == 0)
+        {
+            return Problem(new ApplicationError(
+                "VALIDATION_ERROR",
+                "DocumentType and file are required.",
+                StatusCodes.Status400BadRequest));
+        }
+
+        await using var stream = file.OpenReadStream();
+        var result = await uploadDocumentUseCase.ExecuteAsync(
+            proposalId,
+            new UploadDocumentRequest(documentType, file.FileName, file.ContentType, file.Length, stream),
+            cancellationToken);
 
         return result.IsSuccess
             ? Ok(result.Value)

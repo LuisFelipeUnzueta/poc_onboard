@@ -8,5 +8,7 @@ public interface IProposalRepository
 {
     Task<bool> ExistsActiveByCnpjAsync(Cnpj cnpj, CancellationToken cancellationToken);
     Task AddAsync(Proposal proposal, CancellationToken cancellationToken);
+    Task<Proposal?> GetAggregateByIdAsync(ProposalId proposalId, CancellationToken cancellationToken);
+    Task SaveDocumentUploadAsync(Proposal proposal, ProposalDocument document, CancellationToken cancellationToken);
     Task<ProposalDetailsResponse?> GetByIdAsync(ProposalId proposalId, CancellationToken cancellationToken);
 }

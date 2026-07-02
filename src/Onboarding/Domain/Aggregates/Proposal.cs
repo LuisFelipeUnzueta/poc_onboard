@@ -95,6 +95,34 @@ public sealed class Proposal : AggregateRoot<ProposalId>
         return Result<Proposal>.Success(proposal);
     }
 
+    public static Proposal Rehydrate(
+        ProposalId id,
+        PartnerId partnerId,
+        Cnpj cnpj,
+        LegalName legalName,
+        Segment segment,
+        Mcc mcc,
+        ProposalStatus status,
+        IEnumerable<Partner> partners,
+        BankAccount bankAccount,
+        Address address,
+        IEnumerable<ProposalDocument> documents,
+        DateTimeOffset createdAt,
+        DateTimeOffset updatedAt,
+        int version)
+    {
+        var proposal = new Proposal(id, partnerId, cnpj, legalName, segment, mcc, partners, bankAccount, address, createdAt)
+        {
+            Status = status,
+            UpdatedAt = updatedAt,
+            Version = version
+        };
+
+        proposal._documents.AddRange(documents);
+
+        return proposal;
+    }
+
     public Result AttachDocument(DocumentType documentType, S3Key s3Key)
     {
         if (_documents.Any(document => document.DocumentType == documentType))
@@ -102,7 +130,7 @@ public sealed class Proposal : AggregateRoot<ProposalId>
             return Result.Failure(DomainError.DocumentAlreadyUploaded);
         }
 
-        var domainEvent = new DocumentAttached(Id, documentType, s3Key, DateTimeOffset.UtcNow);
+        var domainEvent = new DocumentAttached(Id, DocumentId.New(), documentType, s3Key, DateTimeOffset.UtcNow);
         Apply(domainEvent);
 
         return Result.Success();
@@ -130,7 +158,8 @@ public sealed class Proposal : AggregateRoot<ProposalId>
         return Status switch
         {
             ProposalStatus.Draft => newStatus == ProposalStatus.PendingDocuments,
-            ProposalStatus.PendingDocuments => newStatus == ProposalStatus.PendingPricing,
+            ProposalStatus.PendingDocuments => newStatus == ProposalStatus.WaitingDocumentsApproval,
+            ProposalStatus.WaitingDocumentsApproval => newStatus == ProposalStatus.PendingPricing,
             ProposalStatus.PendingPricing => newStatus == ProposalStatus.PendingRiskAnalysis,
             ProposalStatus.PendingRiskAnalysis => newStatus is ProposalStatus.Approved or ProposalStatus.Rejected,
             ProposalStatus.Approved => newStatus == ProposalStatus.SubmittedToAcquirer,
@@ -147,9 +176,14 @@ public sealed class Proposal : AggregateRoot<ProposalId>
 
     private void Apply(DocumentAttached @event)
     {
-        _documents.Add(new ProposalDocument(@event.DocumentType, @event.S3Key, @event.OccurredAt));
+        _documents.Add(new ProposalDocument(@event.DocumentId, @event.DocumentType, @event.S3Key, @event.OccurredAt));
         Touch(@event.OccurredAt);
         AddDomainEvent(@event);
+    }
+
+    public void MarkDocumentsCompleted()
+    {
+        AddDomainEvent(new DocumentsCompleted(Id, DateTimeOffset.UtcNow));
     }
 
     private void Apply(StatusChanged @event)
