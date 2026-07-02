@@ -17,7 +17,7 @@ public sealed class CreateProposalUseCase(
     private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(24);
 
     public async Task<ApplicationResult<CreateProposalResponse>> ExecuteAsync(
-        CreateProposalRequest request,
+        CreateProposalCommand command,
         string idempotencyKey,
         string requestHash,
         CancellationToken cancellationToken)
@@ -34,7 +34,7 @@ public sealed class CreateProposalUseCase(
             return ApplicationResult<CreateProposalResponse>.Success(cachedResponse!, idempotencyReplayed: true);
         }
 
-        var proposalResult = CreateProposal(request);
+        var proposalResult = CreateProposal(command);
         if (proposalResult.IsFailure)
         {
             return Failure<CreateProposalResponse>(proposalResult.Error!, StatusCodes.Status400BadRequest);
@@ -73,36 +73,36 @@ public sealed class CreateProposalUseCase(
     private static ApplicationResult<T> Failure<T>(DomainError error, int statusCode) =>
         ApplicationResult<T>.Failure(ApplicationError.FromDomain(error, statusCode));
 
-    private static Result<Proposal> CreateProposal(CreateProposalRequest request)
+    private static Result<Proposal> CreateProposal(CreateProposalCommand command)
     {
-        if (!Enum.TryParse<Segment>(request.Segment, ignoreCase: true, out var segment))
+        if (!Enum.TryParse<Segment>(command.Segment, ignoreCase: true, out var segment))
         {
             return Result<Proposal>.Failure(DomainError.Validation("Segment must be valid."));
         }
 
-        if (!Enum.TryParse<BankAccountType>(request.BankAccount.AccountType, ignoreCase: true, out var accountType))
+        if (!Enum.TryParse<BankAccountType>(command.BankAccount.AccountType, ignoreCase: true, out var accountType))
         {
             return Result<Proposal>.Failure(DomainError.Validation("BankAccount accountType must be valid."));
         }
 
-        var partnerId = PartnerId.Create(request.PartnerId);
-        var cnpj = Cnpj.Create(request.Cnpj);
-        var legalName = LegalName.Create(request.LegalName);
-        var mcc = Mcc.Create(request.Mcc);
+        var partnerId = PartnerId.Create(command.PartnerId);
+        var cnpj = Cnpj.Create(command.Cnpj);
+        var legalName = LegalName.Create(command.LegalName);
+        var mcc = Mcc.Create(command.Mcc);
         var bankAccount = BankAccount.Create(
-            request.BankAccount.Ispb,
-            request.BankAccount.Agency,
-            request.BankAccount.AccountNumber,
-            request.BankAccount.AccountDigit,
+            command.BankAccount.Ispb,
+            command.BankAccount.Agency,
+            command.BankAccount.AccountNumber,
+            command.BankAccount.AccountDigit,
             accountType);
         var address = Address.Create(
-            request.Address.ZipCode,
-            request.Address.Street,
-            request.Address.Number,
-            request.Address.Complement,
-            request.Address.Neighborhood,
-            request.Address.City,
-            request.Address.State);
+            command.Address.ZipCode,
+            command.Address.Street,
+            command.Address.Number,
+            command.Address.Complement,
+            command.Address.Neighborhood,
+            command.Address.City,
+            command.Address.State);
 
         var validationError = FirstError(partnerId.Error, cnpj.Error, legalName.Error, mcc.Error, bankAccount.Error, address.Error);
         if (validationError is not null)
@@ -111,26 +111,26 @@ public sealed class CreateProposalUseCase(
         }
 
         var partners = new List<Partner>();
-        foreach (var partnerRequest in request.Partners)
+        foreach (var partner in command.Partners)
         {
-            var cpf = Cpf.Create(partnerRequest.Cpf);
+            var cpf = Cpf.Create(partner.Cpf);
             if (cpf.IsFailure)
             {
                 return Result<Proposal>.Failure(cpf.Error!);
             }
 
-            var partner = Partner.Create(
-                partnerRequest.Name,
+            var proposalPartner = Partner.Create(
+                partner.Name,
                 cpf.Value!,
-                partnerRequest.ParticipationPercentage,
-                partnerRequest.IsLegalRepresentative);
+                partner.ParticipationPercentage,
+                partner.IsLegalRepresentative);
 
-            if (partner.IsFailure)
+            if (proposalPartner.IsFailure)
             {
-                return Result<Proposal>.Failure(partner.Error!);
+                return Result<Proposal>.Failure(proposalPartner.Error!);
             }
 
-            partners.Add(partner.Value!);
+            partners.Add(proposalPartner.Value!);
         }
 
         return Proposal.Create(

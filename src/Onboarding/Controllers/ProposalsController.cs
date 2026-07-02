@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Onboarding.Application.Common;
 using Onboarding.Application.Proposals;
+using Onboarding.Controllers.Requests;
 
 namespace Onboarding.Controllers;
 
@@ -33,8 +34,9 @@ public sealed class ProposalsController(
                 StatusCodes.Status400BadRequest));
         }
 
+        var command = request.ToCommand();
         var result = await createProposalUseCase.ExecuteAsync(
-            request,
+            command,
             idempotencyKey.ToString(),
             ComputeHash(request),
             cancellationToken);
@@ -74,11 +76,10 @@ public sealed class ProposalsController(
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<IActionResult> UploadDocumentAsync(
         string proposalId,
-        [FromForm] string documentType,
-        [FromForm] IFormFile? file,
+        [FromForm] UploadDocumentFormRequest request,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(documentType) || file is null || file.Length == 0)
+        if (string.IsNullOrWhiteSpace(request.DocumentType) || request.File is null || request.File.Length == 0)
         {
             return Problem(new ApplicationError(
                 "VALIDATION_ERROR",
@@ -86,10 +87,12 @@ public sealed class ProposalsController(
                 StatusCodes.Status400BadRequest));
         }
 
+        var file = request.File;
         await using var stream = file.OpenReadStream();
+        var command = request.ToCommand(stream);
         var result = await uploadDocumentUseCase.ExecuteAsync(
             proposalId,
-            new UploadDocumentRequest(documentType, file.FileName, file.ContentType, file.Length, stream),
+            command,
             cancellationToken);
 
         return result.IsSuccess

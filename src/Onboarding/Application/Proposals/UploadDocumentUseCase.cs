@@ -17,7 +17,7 @@ public sealed partial class UploadDocumentUseCase(
 
     public async Task<ApplicationResult<UploadDocumentResponse>> ExecuteAsync(
         string proposalId,
-        UploadDocumentRequest request,
+        UploadDocumentCommand command,
         CancellationToken cancellationToken)
     {
         var parsedProposalId = ProposalId.Create(proposalId);
@@ -26,7 +26,7 @@ public sealed partial class UploadDocumentUseCase(
             return Failure<UploadDocumentResponse>(DomainError.ProposalNotFound, StatusCodes.Status404NotFound);
         }
 
-        if (!Enum.TryParse<DocumentType>(request.DocumentType, ignoreCase: true, out var documentType))
+        if (!Enum.TryParse<DocumentType>(command.DocumentType, ignoreCase: true, out var documentType))
         {
             return ApplicationResult<UploadDocumentResponse>.Failure(new ApplicationError(
                 "VALIDATION_ERROR",
@@ -34,7 +34,7 @@ public sealed partial class UploadDocumentUseCase(
                 StatusCodes.Status400BadRequest));
         }
 
-        if (!AllowedContentTypes.Contains(request.ContentType))
+        if (!AllowedContentTypes.Contains(command.ContentType))
         {
             return ApplicationResult<UploadDocumentResponse>.Failure(new ApplicationError(
                 "INVALID_FILE_TYPE",
@@ -42,7 +42,7 @@ public sealed partial class UploadDocumentUseCase(
                 StatusCodes.Status400BadRequest));
         }
 
-        if (request.Length > MaxFileSize)
+        if (command.Length > MaxFileSize)
         {
             return ApplicationResult<UploadDocumentResponse>.Failure(new ApplicationError(
                 "FILE_TOO_LARGE",
@@ -61,7 +61,7 @@ public sealed partial class UploadDocumentUseCase(
             return Failure<UploadDocumentResponse>(DomainError.InvalidProposalStatus, StatusCodes.Status422UnprocessableEntity);
         }
 
-        var attachResult = proposal.AttachDocument(documentType, CreateS3Key(parsedProposalId.Value!.Value, documentType, request.FileName));
+        var attachResult = proposal.AttachDocument(documentType, CreateS3Key(parsedProposalId.Value!.Value, documentType, command.FileName));
         if (attachResult.IsFailure)
         {
             return Failure<UploadDocumentResponse>(attachResult.Error!, StatusCodes.Status409Conflict);
@@ -80,7 +80,7 @@ public sealed partial class UploadDocumentUseCase(
 
         var uploadedDocument = proposal.Documents.Single(document => document.DocumentType == documentType);
 
-        await documentStorage.UploadAsync(uploadedDocument.S3Key, request.Content, request.ContentType, cancellationToken);
+        await documentStorage.UploadAsync(uploadedDocument.S3Key, command.Content, command.ContentType, cancellationToken);
 
         try
         {

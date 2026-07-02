@@ -5,7 +5,7 @@ namespace Onboarding.Application.Proposals;
 public interface ICreateProposalUseCase
 {
     Task<ApplicationResult<CreateProposalResponse>> ExecuteAsync(
-        CreateProposalRequest request,
+        CreateProposalCommand command,
         string idempotencyKey,
         string requestHash,
         CancellationToken cancellationToken);
@@ -20,6 +20,6 @@ public interface IUploadDocumentUseCase
 {
     Task<ApplicationResult<UploadDocumentResponse>> ExecuteAsync(
         string proposalId,
-        UploadDocumentRequest request,
+        UploadDocumentCommand command,
         CancellationToken cancellationToken);
 }
