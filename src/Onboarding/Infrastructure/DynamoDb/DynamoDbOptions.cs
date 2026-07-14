@@ -9,4 +9,5 @@ public sealed class DynamoDbOptions
     public string Region { get; init; } = "us-east-1";
     public string AccessKey { get; init; } = "local";
     public string SecretKey { get; init; } = "local";
+    public bool InitializeTable { get; init; }
 }

@@ -24,7 +24,7 @@ public static class LifeCycleStartupExtension
             var config = new AmazonDynamoDBConfig
             {
                 ServiceURL = options.ServiceUrl,
-                RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(options.Region)
+                AuthenticationRegion = options.Region
             };
 
             return new AmazonDynamoDBClient(new BasicAWSCredentials(options.AccessKey, options.SecretKey), config);
@@ -42,7 +42,7 @@ public static class LifeCycleStartupExtension
             var config = new AmazonS3Config
             {
                 ServiceURL = options.ServiceUrl,
-                RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(options.Region),
+                AuthenticationRegion = options.Region,
                 ForcePathStyle = true
             };
 
@@ -56,6 +56,7 @@ public static class LifeCycleStartupExtension
         services.AddScoped<ICreateProposalUseCase, CreateProposalUseCase>();
         services.AddScoped<IGetProposalUseCase, GetProposalUseCase>();
         services.AddScoped<IUploadDocumentUseCase, UploadDocumentUseCase>();
+        services.AddHostedService<DynamoDbTableInitializer>();
 
         return services;
     }

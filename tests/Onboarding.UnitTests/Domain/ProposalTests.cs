@@ -134,11 +134,11 @@ public sealed class ProposalTests
     {
         var path = nextStatus switch
         {
-            ProposalStatus.PendingPricing => Array.Empty<ProposalStatus>(),
-            ProposalStatus.PendingRiskAnalysis => [ProposalStatus.PendingPricing],
-            ProposalStatus.Approved => [ProposalStatus.PendingPricing, ProposalStatus.PendingRiskAnalysis],
-            ProposalStatus.SubmittedToAcquirer => [ProposalStatus.PendingPricing, ProposalStatus.PendingRiskAnalysis, ProposalStatus.Approved],
-            ProposalStatus.Completed => [ProposalStatus.PendingPricing, ProposalStatus.PendingRiskAnalysis, ProposalStatus.Approved, ProposalStatus.SubmittedToAcquirer],
+            ProposalStatus.PendingPricing => [ProposalStatus.WaitingDocumentsApproval],
+            ProposalStatus.PendingRiskAnalysis => [ProposalStatus.WaitingDocumentsApproval, ProposalStatus.PendingPricing],
+            ProposalStatus.Approved => [ProposalStatus.WaitingDocumentsApproval, ProposalStatus.PendingPricing, ProposalStatus.PendingRiskAnalysis],
+            ProposalStatus.SubmittedToAcquirer => [ProposalStatus.WaitingDocumentsApproval, ProposalStatus.PendingPricing, ProposalStatus.PendingRiskAnalysis, ProposalStatus.Approved],
+            ProposalStatus.Completed => [ProposalStatus.WaitingDocumentsApproval, ProposalStatus.PendingPricing, ProposalStatus.PendingRiskAnalysis, ProposalStatus.Approved, ProposalStatus.SubmittedToAcquirer],
             _ => Array.Empty<ProposalStatus>()
         };
 

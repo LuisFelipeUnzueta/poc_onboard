@@ -11,7 +11,8 @@ namespace Onboarding.Application.Proposals;
 public sealed class CreateProposalUseCase(
     IProposalRepository proposalRepository,
     IIdempotencyStore idempotencyStore,
-    IDocumentRulesService documentRulesService) : ICreateProposalUseCase
+    IDocumentRulesService documentRulesService,
+    IOnboardingMetrics metrics) : ICreateProposalUseCase
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(24);
@@ -25,6 +26,8 @@ public sealed class CreateProposalUseCase(
         var cached = await idempotencyStore.GetAsync(idempotencyKey, cancellationToken);
         if (cached is not null)
         {
+            metrics.IdempotencyCacheHit("create_proposal");
+
             if (!string.Equals(cached.RequestHash, requestHash, StringComparison.Ordinal))
             {
                 return Failure<CreateProposalResponse>(DomainError.IdempotencyConflict, StatusCodes.Status409Conflict);
@@ -49,6 +52,7 @@ public sealed class CreateProposalUseCase(
         try
         {
             await proposalRepository.AddAsync(proposal, cancellationToken);
+            metrics.ProposalCreated(proposal.Segment);
         }
         catch (ProposalAlreadyExistsException)
         {

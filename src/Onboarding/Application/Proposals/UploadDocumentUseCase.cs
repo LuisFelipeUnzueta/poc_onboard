@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Diagnostics;
 using Onboarding.Application.Abstractions;
 using Onboarding.Application.Common;
 using Onboarding.Domain.Common;
@@ -10,7 +11,8 @@ namespace Onboarding.Application.Proposals;
 public sealed partial class UploadDocumentUseCase(
     IProposalRepository proposalRepository,
     IDocumentStorage documentStorage,
-    IDocumentRulesService documentRulesService) : IUploadDocumentUseCase
+    IDocumentRulesService documentRulesService,
+    IOnboardingMetrics metrics) : IUploadDocumentUseCase
 {
     private const long MaxFileSize = 10 * 1024 * 1024;
     private static readonly HashSet<string> AllowedContentTypes = ["application/pdf", "image/jpeg", "image/png"];
@@ -20,6 +22,7 @@ public sealed partial class UploadDocumentUseCase(
         UploadDocumentCommand command,
         CancellationToken cancellationToken)
     {
+        var startedAt = Stopwatch.GetTimestamp();
         var parsedProposalId = ProposalId.Create(proposalId);
         if (parsedProposalId.IsFailure)
         {
@@ -69,6 +72,7 @@ public sealed partial class UploadDocumentUseCase(
 
         if (documentRulesService.AreAllRequiredDocumentsUploaded(proposal))
         {
+            var previousStatus = proposal.Status;
             var transitionResult = proposal.TransitionTo(ProposalStatus.WaitingDocumentsApproval);
             if (transitionResult.IsFailure)
             {
@@ -76,6 +80,7 @@ public sealed partial class UploadDocumentUseCase(
             }
 
             proposal.MarkDocumentsCompleted();
+            metrics.ProposalStatusTransitioned(previousStatus, proposal.Status);
         }
 
         var uploadedDocument = proposal.Documents.Single(document => document.DocumentType == documentType);
@@ -96,6 +101,8 @@ public sealed partial class UploadDocumentUseCase(
             await DeleteUploadedObjectAsync(uploadedDocument.S3Key, cancellationToken);
             throw;
         }
+
+        metrics.DocumentUploaded(documentType, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
         return ApplicationResult<UploadDocumentResponse>.Success(new UploadDocumentResponse(
             uploadedDocument.Id.Value,

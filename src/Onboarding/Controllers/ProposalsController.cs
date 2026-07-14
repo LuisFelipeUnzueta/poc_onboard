@@ -52,10 +52,10 @@ public sealed class ProposalsController(
             return StatusCode(StatusCodes.Status201Created, result.Value);
         }
 
-        return CreatedAtAction(nameof(GetByIdAsync), new { proposalId = result.Value!.ProposalId }, result.Value);
+        return CreatedAtRoute(nameof(GetByIdAsync), new { proposalId = result.Value!.ProposalId }, result.Value);
     }
 
-    [HttpGet("{proposalId}")]
+    [HttpGet("{proposalId}", Name = nameof(GetByIdAsync))]
     [ProducesResponseType<ProposalDetailsResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByIdAsync(string proposalId, CancellationToken cancellationToken)

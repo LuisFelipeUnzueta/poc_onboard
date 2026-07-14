@@ -12,7 +12,8 @@ namespace Onboarding.Infrastructure.DynamoDb;
 
 public sealed class DynamoDbProposalRepository(
     IAmazonDynamoDB dynamoDb,
-    IOptions<DynamoDbOptions> options) : IProposalRepository
+    IOptions<DynamoDbOptions> options,
+    ICorrelationContext correlationContext) : IProposalRepository
 {
     private const string MetadataSk = "#METADATA";
     private const string ActiveCnpjSk = "#ACTIVE";
@@ -39,36 +40,41 @@ public sealed class DynamoDbProposalRepository(
     {
         try
         {
+            var transactItems = new List<TransactWriteItem>
+            {
+                new()
+                {
+                    Put = new Put
+                    {
+                        TableName = _tableName,
+                        Item = ToMetadataItem(proposal),
+                        ConditionExpression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                    }
+                },
+                new()
+                {
+                    Put = new Put
+                    {
+                        TableName = _tableName,
+                        Item = new Dictionary<string, AttributeValue>
+                        {
+                            ["PK"] = new($"CNPJ#{proposal.Cnpj.Value}"),
+                            ["SK"] = new(ActiveCnpjSk),
+                            ["Type"] = new("CnpjUnique"),
+                            ["ProposalId"] = new(proposal.Id.Value)
+                        },
+                        ConditionExpression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                    }
+                }
+            };
+            transactItems.AddRange(CreateOutboxWrites(proposal));
+
             await dynamoDb.TransactWriteItemsAsync(new TransactWriteItemsRequest
             {
-                TransactItems =
-                [
-                    new TransactWriteItem
-                    {
-                        Put = new Put
-                        {
-                            TableName = _tableName,
-                            Item = ToMetadataItem(proposal),
-                            ConditionExpression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                        }
-                    },
-                    new TransactWriteItem
-                    {
-                        Put = new Put
-                        {
-                            TableName = _tableName,
-                            Item = new Dictionary<string, AttributeValue>
-                            {
-                                ["PK"] = new($"CNPJ#{proposal.Cnpj.Value}"),
-                                ["SK"] = new(ActiveCnpjSk),
-                                ["Type"] = new("CnpjUnique"),
-                                ["ProposalId"] = new(proposal.Id.Value)
-                            },
-                            ConditionExpression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                        }
-                    }
-                ]
+                TransactItems = transactItems
             }, cancellationToken);
+
+            proposal.ClearDomainEvents();
         }
         catch (TransactionCanceledException exception) when (exception.CancellationReasons.Any(reason => reason.Code == "ConditionalCheckFailed"))
         {
@@ -133,47 +139,49 @@ public sealed class DynamoDbProposalRepository(
     {
         try
         {
-            await dynamoDb.TransactWriteItemsAsync(new TransactWriteItemsRequest
+            var transactItems = new List<TransactWriteItem>
             {
-                TransactItems =
-                [
-                    new TransactWriteItem
+                new()
+                {
+                    Put = new Put
                     {
-                        Put = new Put
-                        {
-                            TableName = _tableName,
-                            Item = ToDocumentItem(proposal.Id, document),
-                            ConditionExpression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
-                        }
-                    },
-                    new TransactWriteItem
+                        TableName = _tableName,
+                        Item = ToDocumentItem(proposal.Id, document),
+                        ConditionExpression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                    }
+                },
+                new()
+                {
+                    Update = new Update
                     {
-                        Update = new Update
+                        TableName = _tableName,
+                        Key = new Dictionary<string, AttributeValue>
                         {
-                            TableName = _tableName,
-                            Key = new Dictionary<string, AttributeValue>
-                            {
-                                ["PK"] = new($"PROPOSAL#{proposal.Id.Value}"),
-                                ["SK"] = new(MetadataSk)
-                            },
-                            UpdateExpression = "SET #status = :status, GSI1PK = :gsi1pk, GSI1SK = :gsi1sk, UpdatedAt = :updatedAt, Version = :version",
-                            ConditionExpression = "attribute_exists(PK) AND attribute_exists(SK)",
-                            ExpressionAttributeNames = new Dictionary<string, string>
-                            {
-                                ["#status"] = "Status"
-                            },
-                            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-                            {
-                                [":status"] = new(proposal.Status.ToString()),
-                                [":gsi1pk"] = new($"STATUS#{proposal.Status}"),
-                                [":gsi1sk"] = new($"{proposal.CreatedAt:O}#{proposal.Id.Value}"),
-                                [":updatedAt"] = new(proposal.UpdatedAt.ToString("O")),
-                                [":version"] = new() { N = proposal.Version.ToString(CultureInfo.InvariantCulture) }
-                            }
+                            ["PK"] = new($"PROPOSAL#{proposal.Id.Value}"),
+                            ["SK"] = new(MetadataSk)
+                        },
+                        UpdateExpression = "SET #status = :status, GSI1PK = :gsi1pk, GSI1SK = :gsi1sk, UpdatedAt = :updatedAt, Version = :version",
+                        ConditionExpression = "attribute_exists(PK) AND attribute_exists(SK)",
+                        ExpressionAttributeNames = new Dictionary<string, string> { ["#status"] = "Status" },
+                        ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+                        {
+                            [":status"] = new(proposal.Status.ToString()),
+                            [":gsi1pk"] = new($"STATUS#{proposal.Status}"),
+                            [":gsi1sk"] = new($"{proposal.CreatedAt:O}#{proposal.Id.Value}"),
+                            [":updatedAt"] = new(proposal.UpdatedAt.ToString("O")),
+                            [":version"] = new() { N = proposal.Version.ToString(CultureInfo.InvariantCulture) }
                         }
                     }
-                ]
+                }
+            };
+            transactItems.AddRange(CreateOutboxWrites(proposal));
+
+            await dynamoDb.TransactWriteItemsAsync(new TransactWriteItemsRequest
+            {
+                TransactItems = transactItems
             }, cancellationToken);
+
+            proposal.ClearDomainEvents();
         }
         catch (TransactionCanceledException exception) when (exception.CancellationReasons.Any(reason => reason.Code == "ConditionalCheckFailed"))
         {
@@ -261,6 +269,37 @@ public sealed class DynamoDbProposalRepository(
             ["Status"] = new("Received"),
             ["UploadedAt"] = new(document.UploadedAt.ToString("O"))
         };
+
+    private IEnumerable<TransactWriteItem> CreateOutboxWrites(Proposal proposal) =>
+        OutboxMessageFactory.Create(proposal.DomainEvents, proposal.Version, correlationContext.CorrelationId)
+            .Select(message => new TransactWriteItem
+            {
+                Put = new Put
+                {
+                    TableName = _tableName,
+                    Item = ToOutboxItem(message),
+                    ConditionExpression = "attribute_not_exists(PK) AND attribute_not_exists(SK)"
+                }
+            });
+
+    private static Dictionary<string, AttributeValue> ToOutboxItem(OutboxMessage message) => new()
+    {
+        ["PK"] = new($"OUTBOX#{message.EventId}"),
+        ["SK"] = new(MetadataSk),
+        ["GSI3PK"] = new("OUTBOX#PENDING"),
+        ["GSI3SK"] = new($"{message.OccurredAt:O}#{message.EventId}"),
+        ["Type"] = new("Outbox"),
+        ["Status"] = new("PENDING"),
+        ["EventId"] = new(message.EventId),
+        ["EventType"] = new(message.EventType),
+        ["AggregateId"] = new(message.AggregateId),
+        ["AggregateType"] = new(message.AggregateType),
+        ["OccurredAt"] = new(message.OccurredAt.ToString("O")),
+        ["CorrelationId"] = new(message.CorrelationId),
+        ["Version"] = new() { N = message.Version.ToString(CultureInfo.InvariantCulture) },
+        ["Topic"] = new(message.Topic),
+        ["Payload"] = new(message.Payload)
+    };
 
     private static Dictionary<string, AttributeValue> ToMetadataItem(Proposal proposal) =>
         new()
