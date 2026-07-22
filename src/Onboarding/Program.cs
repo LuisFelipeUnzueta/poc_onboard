@@ -1,3 +1,4 @@
+using Mapster;
 using Onboarding.Extensions;
 using Onboarding.Middleware;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -5,6 +6,9 @@ using Scalar.AspNetCore;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+TypeAdapterConfig.GlobalSettings.Scan(typeof(Program).Assembly);
+TypeAdapterConfig.GlobalSettings.Compile();
 
 builder.Host.UseSerilog((context, services, logger) => logger
     .ReadFrom.Configuration(context.Configuration)

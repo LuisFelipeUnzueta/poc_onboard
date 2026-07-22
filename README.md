@@ -1,117 +1,110 @@
 # Merchant Onboarding Platform
 
-Backend POC para onboarding de merchants, implementado em .NET 10 e C# 14.
+Backend platform for merchant onboarding, implemented in .NET 10 and C# 14.
 
-Estado atual: API core de proposals com persistencia em DynamoDB, idempotencia via Redis, upload de documentos em S3/LocalStack e documentacao com Scalar.
+Proposal lifecycle: creation → document upload → pricing → risk analysis → approval/rejection → acquirer submission.
 
-## Stack atual
+## Stack
 
-- .NET 10
-- C# 14
+- .NET 10 / C# 14
 - ASP.NET Core Web API
-- DynamoDB Local
+- DynamoDB (single-table design, outbox pattern)
 - S3 via LocalStack
-- Redis
-- Scalar
-- xUnit
-- FluentAssertions
-- NSubstitute
-- Docker Compose
+- Redis (idempotency)
+- Kafka (event publishing)
+- Mapster (object mapping)
+- OpenTelemetry + Serilog (observability)
+- xUnit + FluentAssertions + NSubstitute + NetArchTest
+- Docker Compose (local infrastructure)
 
-## Estrutura
+## Architecture
+
+Single-project with logical layers following Clean Architecture dependency flow:
+
+```
+Controllers → Application (interfaces) → Domain ← Infrastructure
+```
+
+See [docs/architecture.md](docs/architecture.md) for details.
+
+## Structure
 
 ```text
 src/
   Onboarding/
-    Controllers/
-    Application/
-    Domain/
-      Aggregates/
-      Common/
-      Enums/
-      Events/
-      ValueObjects/
-    Infrastructure/
-      DynamoDb/
-      Redis/
-      S3/
+    Controllers/           # API endpoints
+    Application/           # Use cases, ports, contracts
+    Domain/                # Entities, value objects, events
+    Infrastructure/        # DynamoDB, Redis, S3, Kafka adapters
+    Mappings/              # Mapster IRegister + ProposalResponseMapper
+    Extensions/            # DI registration
+    Middleware/            # Correlation ID
+    Workers/               # Outbox publisher
 tests/
   Onboarding.UnitTests/
-docker-compose.yml
-Onboarding.slnx
+  Onboarding.ArchitectureTests/
+  Onboarding.IntegrationTests/
+docs/
+  architecture.md
+  dynamodb-modeling.md
+  api-examples.http
+  decisions/              # ADR-001 through ADR-006
 ```
 
 ## Endpoints
 
-- `GET /health/live`
-- `POST /api/proposals`
-- `GET /api/proposals/{proposalId}`
-- `POST /api/proposals/{proposalId}/documents`
-- `GET /scalar`
-- `GET /openapi/v1.json`
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/health/live` | Liveness check |
+| GET | `/health/ready` | Readiness check (DynamoDB, Redis, Kafka) |
+| POST | `/proposals` | Create proposal |
+| GET | `/proposals/{id}` | Get proposal details |
+| POST | `/proposals/{id}/documents` | Upload document |
+| GET | `/scalar` | API documentation UI |
 
-### Upload de documento
+## How to Run
 
-```http
-POST /api/proposals/{proposalId}/documents
-Content-Type: multipart/form-data
-```
+### Prerequisites
 
-Campos obrigatorios:
+- .NET 10 SDK
+- Docker Desktop
 
-- `documentType`
-- `file`
-
-Tipos aceitos:
-
-- `application/pdf`
-- `image/jpeg`
-- `image/png`
-
-Limite: `10 MB`.
-
-S3 key:
-
-```text
-proposals/{proposalId}/documents/{documentType}/{timestamp}-{sanitizedFilename}
-```
-
-Ao enviar todos os documentos obrigatorios, a proposta transiciona de `PendingDocuments` para `WaitingDocumentsApproval`.
-
-## Como validar
-
-```bash
-dotnet restore
-dotnet build --no-restore
-```
-
-## Como rodar
+### Start infrastructure
 
 ```bash
 docker compose up -d
+```
+
+Services:
+
+| Service | Endpoint |
+|---------|----------|
+| DynamoDB Local | `localhost:8000` |
+| Redis | `localhost:6379` |
+| LocalStack (S3) | `localhost:4566` |
+| Kafka | `localhost:9092` |
+
+### Run the API
+
+```bash
 dotnet run --project src/Onboarding
 ```
 
-Documentacao da API:
+API docs: http://localhost:5000/scalar
 
-```text
-http://localhost:5000/scalar
-```
-
-## Infra local
+### Run Tests
 
 ```bash
-docker compose up -d
+# All tests
+dotnet test
+
+# Unit tests only
+dotnet test tests/Onboarding.UnitTests
+
+# Architecture tests only
+dotnet test tests/Onboarding.ArchitectureTests
 ```
 
-Servicos expostos:
+## Contributing
 
-- DynamoDB Local: `localhost:8000`
-- Redis: `localhost:6379`
-- LocalStack: `localhost:4566`
-- Kafka: `localhost:9092`
-
-Storage de documentos:
-
-- Bucket S3 local: `onboarding-documents`
-- Endpoint S3 local: `http://localhost:4566`
+See [CONTRIBUTING.md](CONTRIBUTING.md).

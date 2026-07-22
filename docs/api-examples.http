@@ -1,0 +1,75 @@
+### Create Proposal
+
+POST http://localhost:5000/proposals
+Content-Type: application/json
+X-Correlation-Id: req-001
+
+{
+  "partnerId": "01HQXYZ000000000000000ABC",
+  "cnpj": "11222333000181",
+  "legalName": "Acme Corporation Ltda",
+  "segment": "PayFac",
+  "mcc": "5411",
+  "partners": [
+    {
+      "name": "Joao Silva",
+      "cpf": "52998224725",
+      "participationPercentage": 100,
+      "isLegalRepresentative": true
+    }
+  ],
+  "bankAccount": {
+    "ispb": "60746948",
+    "agency": "0001",
+    "accountNumber": "123456",
+    "accountDigit": "7",
+    "accountType": "CheckingAccount"
+  },
+  "address": {
+    "zipCode": "01310100",
+    "street": "Av. Paulista",
+    "number": "1000",
+    "complement": "Sala 100",
+    "neighborhood": "Bela Vista",
+    "city": "Sao Paulo",
+    "state": "SP"
+  }
+}
+
+###
+
+### Get Proposal Details
+
+GET http://localhost:5000/proposals/{{proposalId}}
+X-Correlation-Id: req-002
+
+###
+
+### Upload Document
+
+POST http://localhost:5000/proposals/{{proposalId}}/documents
+Content-Type: multipart/form-data; boundary=boundary
+X-Correlation-Id: req-003
+
+--boundary
+Content-Disposition: form-data; name="DocumentType"
+
+Contract
+--boundary
+Content-Disposition: form-data; name="File"; filename="contract.pdf"
+Content-Type: application/pdf
+
+< ./contract.pdf
+--boundary--
+
+###
+
+### Health Check (Liveness)
+
+GET http://localhost:5000/health/live
+
+###
+
+### Health Check (Readiness)
+
+GET http://localhost:5000/health/ready

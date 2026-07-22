@@ -3,6 +3,7 @@
     <Project Path="src/Onboarding/Onboarding.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Onboarding.ArchitectureTests/Onboarding.ArchitectureTests.csproj" />
     <Project Path="tests/Onboarding.IntegrationTests/Onboarding.IntegrationTests.csproj" />
     <Project Path="tests/Onboarding.UnitTests/Onboarding.UnitTests.csproj" />
   </Folder>

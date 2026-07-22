@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Mapster;
 using Microsoft.AspNetCore.Mvc;
 using Onboarding.Application.Common;
 using Onboarding.Application.Proposals;
@@ -34,7 +35,7 @@ public sealed class ProposalsController(
                 StatusCodes.Status400BadRequest));
         }
 
-        var command = request.ToCommand();
+        var command = request.Adapt<CreateProposalCommand>();
         var result = await createProposalUseCase.ExecuteAsync(
             command,
             idempotencyKey.ToString(),
@@ -89,7 +90,12 @@ public sealed class ProposalsController(
 
         var file = request.File;
         await using var stream = file.OpenReadStream();
-        var command = request.ToCommand(stream);
+        var command = new UploadDocumentCommand(
+            request.DocumentType,
+            file.FileName,
+            file.ContentType,
+            file.Length,
+            stream);
         var result = await uploadDocumentUseCase.ExecuteAsync(
             proposalId,
             command,

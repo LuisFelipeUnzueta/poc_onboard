@@ -5,6 +5,7 @@ using Onboarding.Application.Common;
 using Onboarding.Domain.Common;
 using Onboarding.Domain.Enums;
 using Onboarding.Domain.ValueObjects;
+using Onboarding.Mappings;
 
 namespace Onboarding.Application.Proposals;
 
@@ -104,11 +105,7 @@ public sealed partial class UploadDocumentUseCase(
 
         metrics.DocumentUploaded(documentType, Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
 
-        return ApplicationResult<UploadDocumentResponse>.Success(new UploadDocumentResponse(
-            uploadedDocument.Id.Value,
-            uploadedDocument.DocumentType.ToString(),
-            "Received",
-            uploadedDocument.UploadedAt));
+        return ApplicationResult<UploadDocumentResponse>.Success(uploadedDocument.ToUploadResponse());
     }
 
     private async Task DeleteUploadedObjectAsync(S3Key s3Key, CancellationToken cancellationToken)
