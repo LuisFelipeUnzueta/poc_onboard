@@ -1,0 +1,3 @@
+[submodule "external/Mapster"]
+	path = external/Mapster
+	url = https://github.com/LuisFelipeUnzueta/Mapster_Study.git

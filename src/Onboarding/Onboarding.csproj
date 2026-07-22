@@ -19,6 +19,6 @@
     <PackageReference Include="StackExchange.Redis" Version="2.8.24" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\Net_Mapper\Mapster_Study\src\Mapster\Mapster.csproj" />
+    <ProjectReference Include="..\..\external\Mapster\src\Mapster\Mapster.csproj" />
   </ItemGroup>
 </Project>
